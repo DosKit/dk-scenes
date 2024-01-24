@@ -214,8 +214,7 @@ end
 RegisterCommand('createscene', OpenMenu)
 RegisterCommand('deletescene', ToggleDeletionLaser)
 
-RegisterNetEvent('dk-scenes:client:UpdateAllScenes', function(data, start)
-    if start then scenes = data return end
+RegisterNetEvent('dk-scenes:client:UpdateAllScenes', function(data)
     if type(data) == 'number' then
         for k, v in pairs(scenes) do
             if v.id == data then
