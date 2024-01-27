@@ -1,5 +1,4 @@
 local closestScenes, scenes, Prompts = {}, GlobalState.Scenes or {}, {}
-local creationLaser, deletionLaser = false, false
 local ColorTable = {
     white = {255, 255, 255},
     red = {117, 0, 16},
@@ -38,70 +37,15 @@ local function DrawLaser(color)
     return hit, coords
 end
 
-local function DrawScene(currentScene)
-    local onScreen, screenX, screenY = GetScreenCoordFromWorldCoord(currentScene.coords.x, currentScene.coords.y, currentScene.coords.z)
-    if onScreen then
-        local camCoords = GetGameplayCamCoord()
-        local distance = #(currentScene.coords - camCoords)
-        local fov = (1 / GetGameplayCamFov()) * 75
-        local scale = (1 / distance) * (4) * fov * (currentScene.fontsize)
-    	SetTextScale(0.0, scale)
-  		SetTextFontForCurrentCommand(1)
-        local text = ColorTable[currentScene.color]
-    	SetTextColor(text[1], text[2], text[3], 215)
-    	SetTextCentre(1)
-        local str = CreateVarString(10, "LITERAL_STRING", currentScene.text, Citizen.ResultAsLong())
-    	DisplayText(str,screenX,screenY)
-    end
-end
-
 local function RegisterPrompts(data)
-    for k, v in pairs(data) do
+    for i=1, #data do
         local prompt = PromptRegisterBegin()
-        PromptSetText(prompt, CreateVarString(10, "LITERAL_STRING", v.label))
-        PromptSetControlAction(prompt, v.key)
+        PromptSetText(prompt, CreateVarString(10, "LITERAL_STRING", data[i][2]))
+        PromptSetControlAction(prompt, data[i][1])
         PromptRegisterEnd(prompt)
         PromptSetEnabled(prompt, true)
         PromptSetVisible(prompt, true)
-        Prompts[k] = prompt
-    end
-end
-
-local function ToggleCreationLaser(data)
-    deletionLaser = false
-    creationLaser = not creationLaser
-    if creationLaser then
-        CreateThread(function()
-            local prompts = {
-                [1] = {key = 0xCEFD9220, label = 'Place Scene'},
-                [2] = {key = 0x760A9C6F, label = 'Cancel Scene'},
-            }
-            RegisterPrompts(prompts)
-            local colorlazer = {r = 2, g = 241, b = 181, a = 200}
-            while creationLaser do
-                local hit, coords = DrawLaser(colorlazer)
-                data.coords = coords
-                DrawScene(data)
-                if IsControlJustReleased(0, 0xCEFD9220) then
-                    creationLaser = false
-                    if hit then
-                        data.id = math.random(1, 5000)
-                        data.viewdistance = tonumber(data.viewdistance)
-                        data.fontsize = tonumber(data.fontsize)
-                        TriggerServerEvent('dk-scenes:server:CreateScene', data)
-                    else
-                        TriggerEvent("DKCore:Notify", "Laser did not hit anything.", "error")
-                    end
-                elseif IsControlJustReleased(0, 0x760A9C6F) then
-                    creationLaser = false
-                end
-                Wait(0)
-            end
-            for k, v in pairs(Prompts) do
-                PromptDelete(v)
-            end
-            Prompts = {}
-        end)
+        Prompts[i] = prompt
     end
 end
 
@@ -116,40 +60,65 @@ local function DeleteScene(coords)
             shortestDistance = distance
         end
     end
-    if closestScene then
-        TriggerServerEvent('dk-scenes:server:DeleteScene', closestScene)
+    if not closestScene then return end
+    TriggerServerEvent('dk-scenes:server:DeleteScene', closestScene)
+end
+
+local function DrawScene(currentScene)
+    local onScreen, sX, sY = GetScreenCoordFromWorldCoord(currentScene.coords.x, currentScene.coords.y, currentScene.coords.z)
+    if onScreen then
+        local camCoords = GetGameplayCamCoord()
+        local distance = #(currentScene.coords - camCoords)
+        local fov = (1 / GetGameplayCamFov()) * 75
+        local scale = (1 / distance) * (4) * fov * (currentScene.size)
+    	SetTextScale(0.0, scale)
+  		SetTextFontForCurrentCommand(1)
+        local text = ColorTable[currentScene.color]
+    	SetTextColor(text[1], text[2], text[3], 215)
+    	SetTextCentre(1)
+        local str = CreateVarString(10, "LITERAL_STRING", currentScene.text, Citizen.ResultAsLong())
+    	DisplayText(str,sX,sY)
     end
 end
 
 local function ToggleDeletionLaser()
-    creationLaser = false
-    deletionLaser = not deletionLaser
-    if deletionLaser then
-        CreateThread(function()
-            local prompts = {
-                [1] = {key = 0xCEFD9220, label = 'Delete Scene'},
-                [2] = {key = 0x760A9C6F, label = 'Cancel'},
-            }
-            RegisterPrompts(prompts)
-            local colorlazer = {r = 255, g = 0, b = 0, a = 200}
-            while deletionLaser do
-                local hit, coords = DrawLaser(colorlazer)
-                if IsControlJustReleased(0, 0xCEFD9220) then
-                    deletionLaser = false
-                    if hit then
-                        DeleteScene(coords)
-                    end
-                elseif IsControlJustReleased(0, 0x760A9C6F) then
-                    deletionLaser = false
-                end
-                Wait(0)
-            end
-            for k, v in pairs(Prompts) do
-                PromptDelete(v)
-            end
-            Prompts = {}
-        end)
+    RegisterPrompts({{0xCEFD9220, 'Delete Scene'}, {0x760A9C6F, 'Cancel'}})
+    local colorlazer = {r = 255, g = 0, b = 0, a = 200}
+    while true do
+        local hit, coords = DrawLaser(colorlazer)
+        if IsControlJustReleased(0, 0xCEFD9220) then
+            if hit then DeleteScene(coords) break end
+        elseif IsControlJustReleased(0, 0x760A9C6F) then
+            break
+        end
+        Wait(3)
     end
+    for _, v in pairs(Prompts) do PromptDelete(v) end
+    Prompts = {}
+end
+
+local function ToggleCreationLaser(data)
+    RegisterPrompts({{0xCEFD9220, 'Place Scene'}, {0x760A9C6F, 'Cancel Scene'}})
+    local colorlazer = {r = 2, g = 241, b = 181, a = 200}
+    while true do
+        local hit, coords = DrawLaser(colorlazer)
+        data.coords = coords
+        DrawScene(data)
+        if IsControlJustReleased(0, 0xCEFD9220) then
+            if hit then
+                data.id, data.dist, data.size = math.random(1, 5000), tonumber(data.dist), tonumber(data.size)
+                TriggerServerEvent('dk-scenes:server:CreateScene', data)
+                break
+            else
+                TriggerEvent("DKCore:Notify", "Laser did not hit anything.", "error")
+            end
+        elseif IsControlJustReleased(0, 0x760A9C6F) then
+            break
+        end
+        Wait(3)
+    end
+    for _, v in pairs(Prompts) do PromptDelete(v) end
+    Prompts = {}
 end
 
 local function OpenMenu()
@@ -179,7 +148,7 @@ local function OpenMenu()
             },
             {
                 text = "Font Size",
-                name = "fontsize",
+                name = "size",
                 type = "radio",
                 options = {
                     { value = 0.5,  text = "1" },
@@ -191,7 +160,7 @@ local function OpenMenu()
             },
             {
                 text = "View Distance",
-                name = "viewdistance",
+                name = "dist",
                 type = "radio",
                 options = {
                     { value = 5.0, text = "5" },
@@ -208,7 +177,7 @@ local function OpenMenu()
 end
 
 -----------------------------------------------------------------------
----- EVENTS AND HANDLERS
+---- COMMANDS AND EVENTS
 -----------------------------------------------------------------------
 
 RegisterCommand('createscene', OpenMenu)
@@ -255,7 +224,7 @@ CreateThread(function()
             for i=1, #closestScenes do
                 local currentScene = closestScenes[i]
                 local distance = #(plyPosition - currentScene.coords)
-                if distance <= currentScene.viewdistance then
+                if distance <= currentScene.dist then
                     wait = 3
                     DrawScene(closestScenes[i])
                 end
